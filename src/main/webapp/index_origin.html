@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>小萌神订餐网</title>
+    <!-- 图标 -->
+    <link rel="short icon" href="image/eat0.ico"/>
+    <link rel="stylesheet" href="css/index.css"/>
+    <style>
+        [v-clock]{
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app">
+
+    <div class="head">
+        小萌神订餐网
+        <div class="right">
+            <span class="showlogin" id="showlogin" @click="loginflag=!loginflag" v-if="!isLogin">登录</span>
+            <span id="exitspan" v-else v-cloak>
+                欢迎您：{{username}}
+                <a href="javascript:void" @click="isShow = !isShow">历史</a> |
+                <a href="#" @click.prevent="logout()">退出</a>
+            </span>
+        </div>
+    </div>
+    <div class="content">
+        <ul class="allfoods" id="allfoods">
+            <li v-for="(item,index) in list">
+                <h3 @click="showFood(item.fid)">{{item.fname}}</h3>
+                <div :id=`fid_${item.fid}` class="fooddesc" v-show="item.status">
+                    <img v-bind:src=`image/${item.fphoto}` class="foodimg"/>
+                    <article class="foodprice">
+                        <p>菜品描述：{{item.detail}}</p>
+                        <p class="normalprice">原价：￥{{item.normprice}}</p>
+                        <p class="realprice">特价：￥{{item.realprice}}</p>
+                        <p class="buybtn" @click="addCart(item.fid,1)">加入购物车</p>
+                        <p>赞{{item.praise}}<span v-if="isLogin" @click="clickPraise(item.fid,index)">点赞</span> </p>
+                    </article>
+                </div>
+            </li>
+        </ul>
+        <div style="background-color: white;color:red">
+            <a href="#" @click.prevent="clickPage(1)">第一页</a>
+            <a href="#" @click.prevent="clickPage(pagebean.pre)">上一页</a>
+            <a href="#" @click.prevent="clickPage(pagebean.next)">下一页</a>
+            <a href="#" @click.prevent="clickPage(pagebean.totalpages)">最后一页</a>
+            总共{{pagebean.total}}条记录/共分{{pagebean.totalpages}}页，每页{{pagebean.pagesize}}条，当前第{{pagebean.pageno}}页
+            按<select id="sortby" v-model="pagebean.sortby">
+                <option value="fid" selected>菜品编号</option>
+                <option value="realprice">成交价</option>
+            </select>
+            <select id="sort" v-model="pagebean.sort">
+                <option value="asc" selected>升序</option>
+                <option value="desc">降序</option>
+            </select>
+        </div>
+    </div>
+    <!--历史记录表-->
+    <div class="look" v-if="isShow" @click="getHistory()">浏览记录(点击刷新
+        <ul style="list-style-type: none">
+            <li v-for="item in history">{{item.fid}}--{{item.fname}}</li>
+        </ul>
+    </div>
+    <div class="shoppingcar">                                       <!--,isShow:isShow==true-->
+        <div class="carbag" id="carbag" :class="{isHide:isHide==true}">
+            <p>购物车<span id="del" @click="clearAll()">[清空]</span></p>
+            <table id="bagcontent" cellpadding="0" cellspacing="0">
+                <tr v-for="item in cart">
+                    <td>{{item.resfood.fname}}</td>
+                    <td></td>
+                    <td><button @click="addCart(item.resfood.fid,-1)">-</button>{{item.num}}<button @click="addCart(item.resfood.fid,1)">+</button></td>
+                </tr>
+            </table>
+        </div>
+        <div class="carprice" @click="showCart()">￥{{cartPrice}}</div>
+        <div class="carinfo" v-if="cart==null||cart.length<=0">购物车是空的</div>
+        <div class="carinfo" v-else @click="orderflag = !orderflag">立即下单</div>
+    </div>
+    <div class="footer">
+        Copyright © 2016 Xiaomengsheng Incorporated Company. All rights reserved.
+        <br/>
+        订餐，就上小萌神订餐网!
+    </div>
+
+    <div class="login" id="login" v-if="loginflag">
+        <span id="unshow" @click="loginflag=!loginflag">X</span>
+        <form name="myform">
+            <table>
+                <tr>
+                    <td class="labname"><label for="username">用户名：</label></td>
+                    <td><input type="text" name="username" placeholder="请输入用户名"
+                               id="username" v-model="username"/></td>
+                </tr>
+                <tr>
+                    <td class="labname"><label for="pwd">密码：</label></td>
+                    <td><input type="password" name="pwd" placeholder="请输入密码"
+                               id="pwd" v-model="pwd"/></td>
+                </tr>
+                <tr>
+                    <td class="labname"><label for="yzm">验证码：</label></td>
+                    <td><input type="text" name="yzm" placeholder="请输入验证码"
+                               id="yzm" v-model="valcode"/></td>
+                    <td><img src="code.action"
+                             id="yzm_img"/>
+                             <!--<img src="http://localhost/resCopy/verifyCodeServlet"
+                             id="yzm_img"/>--></td>
+                </tr>
+            </table>
+        </form>
+        <input type="button" value="login" class="btn" id="btn" @click="login()"/>
+    </div>
+
+    <!-- 订单信息 -->
+    <div class="login" id="myinfo" v-if="orderflag">
+        <span id="unshowinfo" @click="orderflag=!orderflag">X</span>
+        <form name="forminfo">
+            <table>
+                <tr>
+                    <td class="labname"><label for="address">送货地址:</label></td>
+                    <td><input name="address" type="text" placeholder="请输入送货地址" id="address" v-model="orderInfo.address"/></td>
+                </tr>
+                <tr>
+                    <td class="labname"><label for="tel">联系电话:</label></td>
+                    <td><input type="text" id="tel" placeholder="请输入联系电话" name="tel" v-model="orderInfo.tel"/></td>
+                </tr>
+                <tr>
+                    <td class="labname"><label for="deliverytime">送货时间:</label></td>
+                    <td><input type="text" name="deliverytime" id="deliverytime"
+                               placeholder="请输入送货时间（默认马上发货）" v-model="orderInfo.deliverytime"/></td>
+                </tr>
+                <tr>
+                    <td class="labname"><label for="ps">附言:</label></td>
+                    <td><input type="text" id="ps" placeholder="请输入附言" name="ps" v-model="orderInfo.ps"/></td>
+                </tr>
+            </table>
+        </form>
+        <input type="button" value="提交" class="btn" id="submit" @click="confirmOrder()">
+    </div>
+
+</div>
+
+<!--  在网页里面引入javascript    jquery:DOM   大家注意顺序  -->
+<script src="js/vue.js"></script>
+<script src="js/axios-0.18.0.js"></script>
+<script type="text/javascript">
+    let vm = new Vue({
+        el: "#app",
+        data: {
+            orderflag: false,     //送货地址div
+            loginflag: false,
+            isLogin: false, //记录当前登录状态
+
+            //用户数据
+            username: '',
+            pwd: '',
+            valcode:'',
+
+            data: '',   //用户数据
+            list: [],   //菜品列表
+            cart:[],
+            cartPrice:0.0,//总价
+
+            //isShow:false,
+            isHide:true,
+            isShow:false,
+
+            //订单包装成一个子对象
+            orderInfo:{
+                address:'湖南',
+                tel:'0731-84802110',
+                deliverytime:'2024-6-1',
+                ps:'速度'
+            },
+            pagebean:{
+                pageno:1,   //当前第几页
+                pagesize:5, //每页多少条
+                sortby:'realprice',  //排序列名
+                sort:'asc',    //asc/desc
+                total:'0', //总记录数
+                //dataset:'',
+                totalpages:0, //总页数
+                pre:1,    //上一页
+                next:1,   //下一页
+            },
+            history:[]
+        },
+        methods:{
+            clickPraise(fid,index){
+                //fid是要操作的菜品编号，index前端list数组中这个菜的位置，后面返回数据要改点赞数用的
+                var params = new URLSearchParams();
+                params.append("op","clickPraise");
+                params.append("fid",fid);
+                axios.post("resfood.action",params).then(result=>{
+                    var jsonModel = result.data;
+                    if (jsonModel.code == 1){
+                        //this.list[index].praise = jsonModel.data.praise;  //这个是新的点赞数
+                        var d= this.list[index];
+                        d.praise = jsonModel.obj.praise;
+                        //用新的替换老的，触发响应式更新，直接用.是不能触发的
+                        this.list.splice(index,1,d);
+                    }
+                })
+            },
+            getHistory(){
+                axios.post("resfood.action?op=getHistory").then(result=>{
+                    if (result.data.code==1){
+                        this.history = result.data.obj;
+                    }
+                })
+            },
+            showPage(pageno){
+                var params = new URLSearchParams();
+                params.append("pageno",pageno);
+                params.append("pagesize",this.pagebean.pagesize);
+                params.append("sortby",this.pagebean.sortby);
+                params.append("sort",this.pagebean.sort);
+                return axios.post("resfood.action?op=findAllFoodsByPage",params);
+            },
+            clickPage(pageno){
+                this.showPage(pageno).then(result2=>{
+                    if (result2.data.code == 1){
+                        this.pagebean = result2.data.obj;
+                        result2.data.obj.dataset.forEach((item, index) => {
+                            Vue.set(item, 'status', false);  // 使用 Vue.set 设置 status 属性
+                            //item.status=false;
+                        });
+                        this.list = result2.data.obj.dataset;  // 更新 list
+                    }else{
+                        alert("商品展示失败,原因是:"+result.data.error);
+                    }
+                })
+            },
+            confirmOrder(){
+                var params = new URLSearchParams();
+                params.append("address",this.orderInfo.address);
+                params.append("tel",this.orderInfo.tel);
+                params.append("deliverytime",this.orderInfo.deliverytime);
+                params.append("ps",this.orderInfo.ps);
+                axios.post("custOp.action?op=confirmOrder",params).then(s=>{
+                    if (s.data.code==1){
+                        alert("下单成功");
+                        this.cart = [];
+                        this.cartPrice = 0.0;
+                        this.isHide = true;
+                        this.orderflag = false;
+                    }
+                })
+            },
+            clearAll(){
+                axios.post("resorder.action?op=clearAll").then(result=>{
+                    if (result.data.code == 1){
+                        alert("清空成功");
+                        this.cart = [];
+                        this.cartPrice = 0.0;
+                        this.isHide = true;
+                        //this.isShow = false;
+                    }else{
+                        alert("清空失败");
+                    }
+                })
+            },
+            showCart(){
+                //this.isShow = !this.isShow;
+                this.isHide = !this.isHide;
+            },
+            addCart(fid,num){
+                if (this.username==null || this.username==''){
+                    alert("未登录");
+                    return;
+                }
+                var params = new URLSearchParams();
+                params.append("fid",fid);
+                params.append('num',num);
+                axios.post("resorder.action?op=order",params).then(s=>{
+                    var jsonModel = s.data;
+                    if (jsonModel.code==-1){
+                        alert("未登录");
+                        return;
+                    }else if (jsonModel.code==0){
+                        alert("添加失败");
+                        return;
+                    }else{
+                        //成功
+                        this.showCartInfo(jsonModel.obj);
+                    }
+                })
+            },
+            showCartInfo(cart){
+                this.cart = cart;
+                this.cartPrice=0.0;
+                //计算总价
+                this.cart.forEach(item=>{
+                    this.cartPrice += item.smallCount;
+                })
+            },
+            showFood:function (fid){
+                //查看商品详情
+                this.list.forEach((item,index) =>{
+                    item.status = item.fid == fid;
+                })
+                axios.post("resfood.action?op=traceBrowser&fid="+fid).then(result=>{
+                    if (result.data.code==1){}
+                })
+            },
+            logout:function (){
+                axios.post("resuser.action?op=logout").then(result=>{
+                    if (result.data.code == 1){
+                        this.data = '';
+                        this.username = '';
+                        this.pwd = '';
+                        this.valcode = '';
+                        this.isLogin = false;
+                    }else{
+                        alert("登录失败,原因是:"+result.data.error);
+                    }
+                })
+            },
+            login:function (){
+                var params = new URLSearchParams();
+                params.append("username",this.username);
+                params.append("pwd",this.pwd);
+                params.append("valcode",this.valcode);
+                axios.post("resuser.action?op=login",params).then(result=>{
+                    if (result.data.code == 1){
+                        this.data = result.data.obj;
+                        this.username = result.data.obj.username;
+                        this.pwd = '';
+                        this.valcode = '';
+                        this.loginflag = false;
+                        this.isLogin = true;
+                    }else{
+                        alert("登录失败,原因是:"+result.data.error);
+                    }
+                })
+            },
+            checkLogin(){
+                return axios.post("resuser.action?op=checkLogin");
+            },
+            findAllFoods(){
+                return axios.post("resfood.action?op=findAllFoods");
+            },
+            getCartInfo(){
+                return axios.post("resorder.action?op=getCartInfo");
+            }
+        },
+        mounted(){
+            this.showPage(1);
+            axios.all( [this.checkLogin(),this.showPage(1),this.getCartInfo()] ).then( axios.spread( (result,result2,result3)=>{
+                if (result.data.code == 1){
+                    if (result.data.obj == null){
+                        this.isLogin == false;
+                    }else{
+                        this.data = result.data.obj;
+                        this.username = result.data.obj.username;
+                        this.pwd = '';
+                        this.valcode = '';
+                        this.isLogin = true;
+                    }
+                }else{
+                    alert("未登录");
+                }
+
+                if (result2.data.code == 1) {
+                    this.pagebean = result2.data.obj;
+
+                    result2.data.obj.dataset.forEach((item, index) => {
+                        Vue.set(item, 'status', false);  // 使用 Vue.set 设置 status 属性
+                        //item.status=false;
+                    });
+                    this.list = result2.data.obj.dataset;  // 更新 list
+                } else {
+                    alert("商品展示失败,原因是:" + result.data.error);
+                }
+
+                if (result3.data.code == 0){
+                    alert("获取购物车失败");
+                }else{
+                    this.showCartInfo(result3.data.obj)
+                }
+            }))
+        }
+    });
+</script>
+
+</body>
+</html>
